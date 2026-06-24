@@ -232,12 +232,13 @@ def main():
             # --- GỘP COR VÀ REV ---
             progress_bar.progress(85, text="Đang gộp (Consolidate) và xuất file Output...")
             df_consolidated = pd.concat([df_cor, df_rev], ignore_index=True)
-
+            
             # --- BƯỚC 9, 14, 15: LƯU FILE ---
+            progress_bar.progress(90, text="Đang lưu file Output...")
             output_buffer = io.BytesIO()
             with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
-                original_output_df.to_excel(writer, sheet_name='Original Output', index=False)
-                # Chỉ xuất sheet Consolidated, xoá bỏ các sheet COR/REV riêng lẻ
+                # Đã bỏ dòng lưu original_output_df
+                # Chỉ xuất duy nhất sheet Consolidated
                 df_consolidated.to_excel(writer, sheet_name='Consolidated', index=False)
             st.session_state.output_excel = output_buffer.getvalue()
 
