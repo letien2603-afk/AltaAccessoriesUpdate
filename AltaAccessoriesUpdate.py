@@ -189,12 +189,12 @@ def main():
             with pd.ExcelWriter(ytd_buffer, engine='openpyxl') as writer:
                 filtered_atf.drop(columns=['Original Invoice', 'SortKey'], inplace=True, errors='ignore')
                 
-                # Sheet 1: Toàn bộ dữ liệu lọc
-                filtered_atf.to_excel(writer, sheet_name='YTD ATF', index=False)
-                # Sheet 2: Pivot Table
+                # Sheet 1: Pivot Table
                 summary_pt.to_excel(writer, sheet_name='Summary', index=False)
-                # Sheet 3: Danh sách Latest Invoices (Yêu cầu 2)
+                # Sheet 2: Danh sách Latest Invoices (Yêu cầu 2)
                 latest_invoices.to_excel(writer, sheet_name='YTD ATF-Latest Inv', index=False)
+                # Sheet 3: Toàn bộ dữ liệu lọc
+                filtered_atf.to_excel(writer, sheet_name='YTD ATF', index=False)
             st.session_state.ytd_excel = ytd_buffer.getvalue()
 
             # --- BƯỚC 10 & 11: LỌC "CAMERAS" VÀ TẠO COR/REV ---
