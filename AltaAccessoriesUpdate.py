@@ -283,22 +283,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-bo sheet "Original Output" trong Output.xlsx di
-
-Chào bạn, để bỏ sheet "Original Output" ra khỏi file Output.xlsx, chúng ta chỉ cần xóa dòng lệnh xuất sheet đó trong đoạn code lưu file ở phần cuối cùng. Khi đó, file Output.xlsx sẽ chỉ còn lại duy nhất 1 sheet là "Consolidated" (bản gộp chung của COR và REV).
-Bạn hãy tìm đến đoạn # --- BƯỚC 9, 14, 15: LƯU FILE --- (ở gần cuối file code của bạn) và thay thế bằng đoạn code đã được cập nhật dưới đây:
-            # --- BƯỚC 9, 14, 15: LƯU FILE ---
-            progress_bar.progress(90, text="Đang lưu file Output...")
-            output_buffer = io.BytesIO()
-            with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
-                # Đã bỏ dòng lưu original_output_df
-                # Chỉ xuất duy nhất sheet Consolidated
-                df_consolidated.to_excel(writer, sheet_name='Consolidated', index=False)
-            st.session_state.output_excel = output_buffer.getvalue()
-
-            # Output.csv
-            st.session_state.output_csv = df_consolidated.to_csv(index=False).encode('utf-8-sig')
-
-            st.session_state.processed = True
-            progress_bar.progress(100, text="Hoàn tất xử lý!")
-            st.success("Tất cả các tệp đã sẵn sàng tải xuống!")
+    
