@@ -238,7 +238,7 @@ def main():
                     df_rev['Comment'] = user_comment
 
             # [YÊU CẦU 3A, 3B]: Đảo dấu (Flip Sign) cho tất cả các loại tiền, bao gồm AUD và Native Value
-            currency_cols = ['Transaction Amount', 'EUR Value', 'CAD Value', 'GBP Value', 'AUD Value', 'Native Value']
+            currency_cols = ['Transaction Amount', 'EUR Value', 'CAD Value', 'GBP Value', 'AUD Value', 'Native Currency']
             for col in currency_cols:
                 if col in df_rev.columns:
                     df_rev[col] = pd.to_numeric(df_rev[col], errors='coerce') * -1
