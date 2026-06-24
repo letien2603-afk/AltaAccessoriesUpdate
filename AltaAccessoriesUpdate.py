@@ -59,24 +59,45 @@ def main():
         st.session_state.output_excel = None
         st.session_state.output_csv = None
 
+    # [CẬP NHẬT MỚI]: Hàm xóa kết quả cũ để làm sạch giao diện
+    def reset_download_state():
+        st.session_state.processed = False
+
     # --- BƯỚC 1: NHẬP THÔNG TIN VÀ UPLOAD FILES ---
     st.subheader("1. Required Information & Uploads")
     
-    # [YÊU CẦU 1]: Thêm ô nhập Comment
-    user_comment = st.text_input("Enter Comment for COR/REV updates:", placeholder="Nhập comment tại đây...")
+    # Gắn on_change=reset_download_state để mỗi lần bạn gõ/xóa comment, nút download sẽ tự biến mất
+    user_comment = st.text_input(
+        "Enter Comment for COR/REV updates:", 
+        placeholder="Nhập comment tại đây...",
+        on_change=reset_download_state
+    )
     
     col1, col2 = st.columns(2)
     with col1:
-        atf_file = st.file_uploader("Upload ATF File", type=['xlsx', 'xls', 'xlsb', 'csv'])
+        # Gắn on_change vào uploader để khi đổi/xóa file, giao diện tự reset
+        atf_file = st.file_uploader(
+            "Upload ATF File", 
+            type=['xlsx', 'xls', 'xlsb', 'csv'],
+            on_change=reset_download_state
+        )
     with col2:
-        finance_file = st.file_uploader("Upload Finance File", type=['xlsx', 'xls', 'xlsb'])
+        finance_file = st.file_uploader(
+            "Upload Finance File", 
+            type=['xlsx', 'xls', 'xlsb'],
+            on_change=reset_download_state
+        )
 
     if st.button("Start Processing", type="primary"):
+        # [CẬP NHẬT MỚI]: Ép các nút download biến mất ngay lập tức khi nút Start được bấm
+        st.session_state.processed = False
+
         if not atf_file or not finance_file:
             st.error("Vui lòng upload đầy đủ ATF File và Finance File!")
             return
 
         progress_bar = st.progress(5, text="Đang đọc file ATF...")
+
         
         try:
             if atf_file.name.endswith('.csv'):
