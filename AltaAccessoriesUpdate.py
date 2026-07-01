@@ -279,7 +279,7 @@ def main():
             st.session_state.output_csv = df_consolidated.to_csv(index=False).encode('utf-8-sig')
 
             st.session_state.processed = True
-            progress_bar.progress(100, text="Completed data processing!)
+            progress_bar.progress(100, text="Completed data processing!")
             st.success("Files are ready to download!")
 
         except Exception as e:
