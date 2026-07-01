@@ -51,7 +51,7 @@ def replace_cor_with_rev(val):
 # =====================================================================
 def main():
     st.set_page_config(page_title="ATF & Finance Processor", layout="wide")
-    st.title("ATF & Finance Data Processing Tool")
+    st.title("Alta Access Update")
 
     if 'processed' not in st.session_state:
         st.session_state.processed = False
@@ -69,7 +69,7 @@ def main():
     # Gắn on_change=reset_download_state để mỗi lần bạn gõ/xóa comment, nút download sẽ tự biến mất
     user_comment = st.text_input(
         "Enter Comment for COR/REV updates:", 
-        placeholder="Nhập comment tại đây...",
+        placeholder="Input your comment",
         on_change=reset_download_state
     )
     
@@ -93,10 +93,10 @@ def main():
         st.session_state.processed = False
 
         if not atf_file or not finance_file:
-            st.error("Vui lòng upload đầy đủ ATF File và Finance File!")
+            st.error("You need to upload the latest ATF and Consolidated Finance files!")
             return
 
-        progress_bar = st.progress(5, text="Đang đọc file ATF...")
+        progress_bar = st.progress(5, text="Scanning through ATF file...")
 
         
         try:
@@ -106,7 +106,7 @@ def main():
                 df_atf = pd.read_excel(atf_file)
             
             # --- BƯỚC 2: QUÉT SIÊU TỐC FINANCE FILE ---
-            progress_bar.progress(15, text="Đang quét nhanh Finance file...")
+            progress_bar.progress(15, text="Scanning through the Finance file...")
             fin_xls = pd.ExcelFile(finance_file)
             
             has_part_no = False
@@ -142,7 +142,7 @@ def main():
             fin_sales_list = df_fin[sales_col_name].dropna().astype(str).str.strip().str.lstrip('0').tolist()
 
             # --- BƯỚC 3 & 4: MAPPING VÀ FILTER ATF ---
-            progress_bar.progress(30, text="Đang matching Product ID và Sales Order...")
+            progress_bar.progress(30, text="Matching Product ID and Sales Order...")
             if 'Product ID' in df_atf.columns:
                 df_atf['Product ID Match'] = df_atf['Product ID'].astype(str).str.strip().isin(fin_part_list)
             else:
@@ -154,7 +154,7 @@ def main():
             else:
                 df_atf['Sales Order Match'] = False
 
-            progress_bar.progress(40, text="Đang lọc dữ liệu ATF...")
+            progress_bar.progress(40, text="Scanning the ATF File...")
             filtered_atf = df_atf.copy()
             if 'Process Code' in filtered_atf.columns:
                 cond_process = filtered_atf['Process Code'].astype(str).str.strip().str.upper() == 'CCREC'
@@ -168,7 +168,7 @@ def main():
             ].copy()
 
             # --- BƯỚC 8: LẤY LATEST INVOICES ---
-            progress_bar.progress(55, text="Đang lấy Latest Invoices...")
+            progress_bar.progress(55, text="Taking the latest invoices...")
             if 'Invoice Number' in filtered_atf.columns:
                 filtered_atf['Original Invoice'] = clean_invoice_series(filtered_atf['Invoice Number'])
                 filtered_atf['SortKey'] = filtered_atf['Invoice Number'].apply(get_invoice_rank)
@@ -186,7 +186,7 @@ def main():
                 latest_invoices = filtered_atf.copy()
 
             # --- BƯỚC 6: TẠO PIVOT TABLE TỪ LATEST INVOICES ---
-            progress_bar.progress(65, text="Đang tạo Pivot Table...")
+            progress_bar.progress(65, text="Creating Pivot table...")
             if not latest_invoices.empty and 'Order Number' in latest_invoices.columns and 'Product Description' in latest_invoices.columns:
                 pivot_val = 'Transaction Amount' if 'Transaction Amount' in latest_invoices.columns else 'Order Number'
                 agg_function = 'sum' if 'Transaction Amount' in latest_invoices.columns else 'size'
@@ -205,7 +205,7 @@ def main():
                 summary_pt = pd.DataFrame({"Message": ["No data available for Pivot Table"]})
 
             # --- BƯỚC 5 & 7 & [YÊU CẦU 2]: LƯU YTD ALTA ACCESSORIES REVIEW ---
-            progress_bar.progress(70, text="Đang lưu YTD Alta Accessories Review...")
+            progress_bar.progress(70, text="Saving YTD Alta Accessories Review file...")
             ytd_buffer = io.BytesIO()
             with pd.ExcelWriter(ytd_buffer, engine='openpyxl') as writer:
                 filtered_atf.drop(columns=['Original Invoice', 'SortKey'], inplace=True, errors='ignore')
@@ -219,7 +219,7 @@ def main():
             st.session_state.ytd_excel = ytd_buffer.getvalue()
 
             # --- BƯỚC 10 & 11: LỌC "CAMERAS" VÀ TẠO COR/REV ---
-            progress_bar.progress(75, text="Đang xử lý dữ liệu COR và REV...")
+            progress_bar.progress(75, text="Creating CORs and REVs...")
             if 'Product Description' in latest_invoices.columns:
                 latest_invoices = latest_invoices[latest_invoices['Product Description'].astype(str).str.strip().str.lower() == 'cameras'].copy()
 
@@ -265,7 +265,7 @@ def main():
                     df_rev[col] = pd.to_numeric(df_rev[col], errors='coerce') * -1
 
             # --- GỘP COR VÀ REV ---
-            progress_bar.progress(85, text="Đang gộp (Consolidate) và xuất file Output...")
+            progress_bar.progress(85, text="Consolidated and creating output file...")
             df_consolidated = pd.concat([df_cor, df_rev], ignore_index=True)
 
             # --- BƯỚC 9, 14, 15: LƯU FILE ---
@@ -279,11 +279,11 @@ def main():
             st.session_state.output_csv = df_consolidated.to_csv(index=False).encode('utf-8-sig')
 
             st.session_state.processed = True
-            progress_bar.progress(100, text="Hoàn tất xử lý!")
-            st.success("Tất cả các tệp đã sẵn sàng tải xuống!")
+            progress_bar.progress(100, text="Completed data processing!)
+            st.success("Files are ready to download!")
 
         except Exception as e:
-            st.error(f"Đã xảy ra lỗi: {e}")
+            st.error(f"Error: {e}")
             progress_bar.empty()
             st.session_state.processed = False
 
