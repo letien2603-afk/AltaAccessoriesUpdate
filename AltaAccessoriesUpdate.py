@@ -297,12 +297,14 @@ def main():
 
             # Xuất Output Excel & CSV Buffers
             output_xlsx_buffer = BytesIO()
-            with pd.ExcelWriter(output_xlsx_buffer, engine='openpyxl') as writer:
-                df_cor.to_excel(writer, sheet_name='COR', index=False)
-                df_rev.to_excel(writer, sheet_name='REV', index=False)
+            #with pd.ExcelWriter(output_xlsx_buffer, engine='openpyxl') as writer:
+            #    df_cor.to_excel(writer, sheet_name='COR', index=False)
+            #    df_rev.to_excel(writer, sheet_name='REV', index=False)
 
             df_consolidated = pd.concat([df_cor, df_rev], ignore_index=True)
-
+            with pd.ExcelWriter(output_xlsx_buffer, engine='openpyxl') as writer:
+                output_xlsx_buffer = df_consolidated.to_excel(writer, sheet_name='Consolidated', index=False)
+                
             output_csv_buffer = df_consolidated.to_csv(index=False).encode('utf-8-sig')
 
             # Lưu dữ liệu vào Session State
