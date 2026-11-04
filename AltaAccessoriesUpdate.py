@@ -103,6 +103,26 @@ def main():
       progress_bar.progress(15)
       df_atf = pd.read_parquet(atf_file)
 
+      # Xử lý tương thích dtypes cho Parquet (chuyển PyArrow/Arrow string về object và ép kiểu số tiền)
+      for col in df_atf.columns:
+        if isinstance(
+            df_atf[col].dtype, (pd.ArrowDtype, pd.StringDtype)
+        ) or str(df_atf[col].dtype).startswith("string"):
+          df_atf[col] = df_atf[col].astype(object)
+
+      currency_cols = [
+          "Transaction Amount",
+          "EUR Value",
+          "CAD Value",
+          "GBP Value",
+          "AUD Value",
+          "Native Value",
+          "Native Currency",
+      ]
+      for col in currency_cols:
+        if col in df_atf.columns:
+          df_atf[col] = pd.to_numeric(df_atf[col], errors="coerce")
+
       # --- BƯỚC 2: REVIEW FINANCE FILE ---
       status_text.text("Scanning Finance Excel file sheets...")
       progress_bar.progress(30)
@@ -250,14 +270,15 @@ def main():
           and "Order Number" in latest_invoices.columns
           and "Product Description" in latest_invoices.columns
       ):
-        pivot_val = (
-            "Transaction Amount"
-            if "Transaction Amount" in latest_invoices.columns
-            else "Order Number"
-        )
-        agg_function = (
-            "sum" if "Transaction Amount" in latest_invoices.columns else "size"
-        )
+        if "Transaction Amount" in latest_invoices.columns:
+          latest_invoices["Transaction Amount"] = pd.to_numeric(
+              latest_invoices["Transaction Amount"], errors="coerce"
+          ).fillna(0.0)
+          pivot_val = "Transaction Amount"
+          agg_function = "sum"
+        else:
+          pivot_val = "Order Number"
+          agg_function = "size"
 
         summary_pt = pd.pivot_table(
             latest_invoices,
@@ -333,14 +354,6 @@ def main():
 
       df_rev["Transaction Type"] = "MANUAL_ADJ"
 
-      currency_cols = [
-          "Transaction Amount",
-          "EUR Value",
-          "CAD Value",
-          "GBP Value",
-          "AUD Value",
-          "Native Value",
-      ]
       for col in currency_cols:
         if col in df_rev.columns:
           df_rev[col] = pd.to_numeric(df_rev[col], errors="coerce") * -1
