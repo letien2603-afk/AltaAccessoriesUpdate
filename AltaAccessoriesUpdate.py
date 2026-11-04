@@ -265,7 +265,14 @@ def main():
             if 'Product Description' in df_cor.columns:
                 df_cor['Product Description'] = "AVA-Cameras"
             if 'Product Line' in df_cor.columns:
-                df_cor['Product Line'] = "Alta Video"
+                df_cor['Product Line'] = "Alta Video".
+                
+            # [YÊU CẦU 3C]: Cập nhật Comment cho sheet COR
+            if user_comment:
+                if 'Comments' in df_cor.columns:
+                    df_cor['Comments'] = user_comment
+                elif 'Comment' in df_cor.columns:
+                    df_cor['Comment'] = user_comment
 
             if 'Transaction Number' in df_rev.columns:
                 df_rev['Transaction Number'] = df_cor['Transaction Number'].apply(replace_cor_with_rev)
@@ -273,6 +280,13 @@ def main():
                 df_rev['Invoice Number'] = df_cor['Invoice Number'].apply(replace_cor_with_rev)
 
             df_rev['Transaction Type'] = "MANUAL_ADJ"
+            
+            # [YÊU CẦU 3C]: Cập nhật Comment cho sheet REV
+            if user_comment:
+                if 'Comments' in df_rev.columns:
+                    df_rev['Comments'] = user_comment
+                elif 'Comment' in df_rev.columns:
+                    df_rev['Comment'] = user_comment
 
             currency_cols = ['Transaction Amount', 'EUR Value', 'CAD Value', 'GBP Value', 'AUD Value', 'Native Value']
             for col in currency_cols:
