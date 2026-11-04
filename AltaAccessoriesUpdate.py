@@ -296,6 +296,7 @@ def main():
                     df_rev[col] = pd.to_numeric(df_rev[col], errors='coerce') * -1
 
             # Xuất Output Excel & CSV Buffers
+            output_xlsx_buffer = io.BytesIO()
             with pd.ExcelWriter(output_xlsx_buffer, engine='openpyxl') as writer:
                 df_cor.to_excel(writer, sheet_name='COR', index=False)
                 df_rev.to_excel(writer, sheet_name='REV', index=False)
