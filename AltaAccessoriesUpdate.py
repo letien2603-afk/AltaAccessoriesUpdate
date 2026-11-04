@@ -291,7 +291,7 @@ def main():
                 elif 'Comment' in df_rev.columns:
                     df_rev['Comment'] = user_comment
 
-            currency_cols = ['Transaction Amount', 'EUR Value', 'CAD Value', 'GBP Value', 'AUD Value', 'Native Value']
+            currency_cols = ['Transaction Amount', 'EUR Value', 'CAD Value', 'GBP Value', 'AUD Value', 'Native Currency']
             for col in currency_cols:
                 if col in df_rev.columns:
                     df_rev[col] = pd.to_numeric(df_rev[col], errors='coerce') * -1
