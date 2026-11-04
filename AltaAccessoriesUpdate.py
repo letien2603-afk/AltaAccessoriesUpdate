@@ -302,6 +302,11 @@ def main():
                 df_rev.to_excel(writer, sheet_name='REV', index=False)
 
             df_consolidated = pd.concat([df_cor, df_rev], ignore_index=True)
+            with pd.ExcelWriter(output_buffer, engine='openpyxl') as writer:
+                df_consolidated.to_excel(writer, sheet_name='Consolidated', index=False)
+                
+            st.session_state.output_excel = output_buffer.getvalue()
+
             output_csv_buffer = df_consolidated.to_csv(index=False).encode('utf-8-sig')
 
             # Lưu dữ liệu vào Session State
