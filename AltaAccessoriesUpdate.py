@@ -67,7 +67,14 @@ def main():
         st.session_state.output_xlsx = None
         st.session_state.output_csv = None
         st.session_state.ytd_xlsx = None
-
+        
+    # Gắn on_change=reset_download_state để mỗi lần bạn gõ/xóa comment, nút download sẽ tự biến mất
+    user_comment = st.text_input(
+        "Enter Comment for COR/REV updates:", 
+        placeholder="Input your comment",
+        on_change=reset_download_state
+    )
+    
     col1, col2 = st.columns(2)
     with col1:
         atf_file = st.file_uploader("1. Upload ATF File (Parquet)", type=['parquet', 'pq'])
