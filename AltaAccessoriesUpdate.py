@@ -67,6 +67,9 @@ def main():
         st.session_state.output_xlsx = None
         st.session_state.output_csv = None
         st.session_state.ytd_xlsx = None
+    # [CẬP NHẬT MỚI]: Hàm xóa kết quả cũ để làm sạch giao diện
+    def reset_download_state():
+        st.session_state.processed = False
         
     # Gắn on_change=reset_download_state để mỗi lần bạn gõ/xóa comment, nút download sẽ tự biến mất
     user_comment = st.text_input(
