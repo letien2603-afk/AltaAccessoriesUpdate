@@ -297,6 +297,7 @@ def main():
                     df_rev[col] = pd.to_numeric(df_rev[col], errors='coerce') * -1
 
             df_consolidated = pd.concat([df_cor, df_rev], ignore_index=True)
+            df_consolidated.drop(columns=['Product ID Match', 'Sales Order Match'], errors='ignore', inplace=True)
             
             # Xuất Output Excel & CSV Buffers
             output_xlsx_buffer = io.BytesIO()
