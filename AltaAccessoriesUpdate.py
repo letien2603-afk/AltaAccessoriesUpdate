@@ -1,420 +1,302 @@
-from io import BytesIO
-import re
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import re
+from io import BytesIO
 
+st.set_page_config(page_title="Alta Accessories Update Tool", layout="wide")
 
 # =====================================================================
 # 1. HÀM XỬ LÝ CHUỖI SIÊU TỐC VÀ LATEST INVOICES
 # =====================================================================
 def clean_invoice_series(series):
-  """Làm sạch Original Invoice và xoá bỏ số 0 ở đầu (leading zeros)"""
-  s = series.astype(str).str.strip()
-  s = s.str.replace(r"\.0$", "", regex=True)
-  base = s.str.replace(
-      r"[\s\-]*(COR|REV)\d*$", "", regex=True, flags=re.IGNORECASE
-  )
-  cleaned = base.str.lstrip("0")
-  return cleaned.where(cleaned != "", base).replace("nan", pd.NA)
-
+    """Làm sạch Original Invoice và xoá bỏ số 0 ở đầu (leading zeros)"""
+    s = series.astype(str).str.strip()
+    s = s.str.replace(r'\.0$', '', regex=True)
+    base = s.str.replace(r'[\s\-]*(COR|REV)\d*$', '', regex=True, flags=re.IGNORECASE)
+    cleaned = base.str.lstrip('0')
+    return cleaned.where(cleaned != '', base).replace('nan', pd.NA)
 
 def get_invoice_rank(inv):
-  """Tính điểm thứ hạng Invoice để lấy latest invoice chuẩn xác"""
-  if pd.isna(inv):
-    return 0
-  inv_str = str(inv).upper().strip()
-  match = re.search(r"([\s\-]*)(COR|REV)(\d*)$", inv_str)
-  if not match:
-    return 0
-
-  separator = match.group(1)
-  type_str = match.group(2)
-  num_str = match.group(3)
-
-  type_val = 2 if type_str == "COR" else 1
-  num_val = int(num_str) if num_str else 1
-  dash_count = separator.count("-")
-
-  return (num_val * 100) + (type_val * 10) + dash_count
-
+    """Tính điểm thứ hạng Invoice để lấy latest invoice chuẩn xác"""
+    if pd.isna(inv):
+        return 0
+    inv_str = str(inv).upper().strip()
+    match = re.search(r'([\s\-]*)(COR|REV)(\d*)$', inv_str)
+    if not match:
+        return 0
+    
+    separator = match.group(1)
+    type_str = match.group(2)
+    num_str = match.group(3)
+    
+    type_val = 2 if type_str == 'COR' else 1
+    num_val = int(num_str) if num_str else 1
+    dash_count = separator.count('-')
+    
+    return (num_val * 100) + (type_val * 10) + dash_count
 
 def increment_or_append_suffix(val, suffix_type):
-  """Gắn hoặc tăng hậu tố COR/REV"""
-  if pd.isnull(val):
-    return val
-  val_str = str(val).strip()
-  match = re.search(r"(?i)(.*?)(?:[\s\-]*)(COR|REV)(\d*)$", val_str)
-  if match:
-    prefix = match.group(1).rstrip("- ")
-    num_str = match.group(3)
-    current_num = int(num_str) if num_str else 1
-    next_num = current_num + 1
-    return f"{prefix}-{suffix_type}{next_num}"
-  else:
-    return f"{val_str.rstrip('- ')}-{suffix_type}"
-
+    """Gắn hoặc tăng hậu tố COR/REV"""
+    if pd.isnull(val): return val
+    val_str = str(val).strip()
+    match = re.search(r'(?i)(.*?)(?:[\s\-]*)(COR|REV)(\d*)$', val_str)
+    if match:
+        prefix = match.group(1).rstrip('- ')
+        num_str = match.group(3)
+        current_num = int(num_str) if num_str else 1
+        next_num = current_num + 1
+        return f"{prefix}-{suffix_type}{next_num}"
+    else:
+        return f"{val_str.rstrip('- ')}-{suffix_type}"
 
 def replace_cor_with_rev(val):
-  """Đổi chữ COR thành REV để đồng bộ cấp độ"""
-  if pd.isnull(val):
-    return val
-  val = str(val)
-  return re.sub(r"COR(\d*)$", r"REV\1", val)
-
+    """Đổi chữ COR thành REV để đồng bộ cấp độ"""
+    if pd.isnull(val): return val
+    val = str(val)
+    return re.sub(r'COR(\d*)$', r'REV\1', val)
 
 # =====================================================================
 # 2. CHƯƠNG TRÌNH STREAMLIT
 # =====================================================================
 def main():
-  st.set_page_config(page_title="Alta Accessories Update Tool", layout="wide")
-  st.title("ATF & Finance Data Processing Tool")
+    st.title("ATF & Finance Data Processing Tool")
 
-  # Khởi tạo Session State
-  if "processed" not in st.session_state:
-    st.session_state.processed = False
-    st.session_state.output_xlsx = None
-    st.session_state.output_csv = None
-    st.session_state.ytd_xlsx = None
-
-  col1, col2 = st.columns(2)
-  with col1:
-    atf_file = st.file_uploader(
-        "1. Upload ATF File (Parquet)", type=["parquet", "pq"]
-    )
-  with col2:
-    fin_file = st.file_uploader(
-        "2. Upload Finance File (Excel)", type=["xlsx", "xls", "xlsb"]
-    )
-
-  if st.button("Start Data Processing", type="primary"):
-    if not atf_file or not fin_file:
-      st.error(
-          "⚠️ Error: Please upload both ATF (Parquet) and Finance (Excel)"
-          " files before processing."
-      )
-      return
-
-    progress_bar = st.progress(0, text="Starting data processing...")
-    status_text = st.empty()
-
-    try:
-      # --- BƯỚC 1: ĐỌC DỮ LIỆU ATF PARQUET ---
-      status_text.text("Reading ATF Parquet file...")
-      progress_bar.progress(15)
-      df_atf = pd.read_parquet(atf_file)
-
-      # Xử lý tương thích dtypes cho Parquet (chuyển PyArrow/Arrow string về object và ép kiểu số tiền)
-      for col in df_atf.columns:
-        if isinstance(
-            df_atf[col].dtype, (pd.ArrowDtype, pd.StringDtype)
-        ) or str(df_atf[col].dtype).startswith("string"):
-          df_atf[col] = df_atf[col].astype(object)
-
-      currency_cols = [
-          "Transaction Amount",
-          "EUR Value",
-          "CAD Value",
-          "GBP Value",
-          "AUD Value",
-          "Native Value",
-          "Native Currency",
-      ]
-      for col in currency_cols:
-        if col in df_atf.columns:
-          df_atf[col] = pd.to_numeric(df_atf[col], errors="coerce")
-
-      # --- BƯỚC 2: REVIEW FINANCE FILE ---
-      status_text.text("Scanning Finance Excel file sheets...")
-      progress_bar.progress(30)
-      fin_xls = pd.ExcelFile(fin_file)
-
-      has_part_no = False
-      has_sales_order = False
-      part_col_name = None
-      sales_col_name = None
-      df_fin = None
-
-      for sheet in fin_xls.sheet_names:
-        temp_header = pd.read_excel(fin_xls, sheet_name=sheet, nrows=0)
-        temp_header.columns = (
-            temp_header.columns.astype(str)
-            .str.replace("'", "", regex=False)
-            .str.strip()
-        )
-        cols_lower = temp_header.columns.str.lower()
-
-        part_matches = cols_lower.str.contains(
-            "part no|part number", regex=True, na=False
-        )
-        sales_matches = cols_lower.str.contains(
-            "sales order", regex=True, na=False
-        )
-
-        if part_matches.any() and sales_matches.any():
-          has_part_no = True
-          has_sales_order = True
-          part_col_name = temp_header.columns[part_matches].tolist().pop(0)
-          sales_col_name = temp_header.columns[sales_matches].tolist().pop(0)
-
-          df_fin = pd.read_excel(fin_xls, sheet_name=sheet)
-          df_fin.columns = (
-              df_fin.columns.astype(str)
-              .str.replace("'", "", regex=False)
-              .str.strip()
-          )
-          break
-
-      if not (has_part_no and has_sales_order):
-        st.error(
-            "❌ Error: Either Part Number or Sales Order column is not"
-            " available in Finance file."
-        )
-        progress_bar.empty()
+    # Khởi tạo Session State
+    if 'processed' not in st.session_state:
         st.session_state.processed = False
-        return
+        st.session_state.output_xlsx = None
+        st.session_state.output_csv = None
+        st.session_state.ytd_xlsx = None
 
-      fin_part_list = (
-          df_fin[part_col_name].dropna().astype(str).str.strip().tolist()
-      )
-      fin_sales_list = (
-          df_fin[sales_col_name]
-          .dropna()
-          .astype(str)
-          .str.strip()
-          .str.lstrip("0")
-          .tolist()
-      )
+    col1, col2 = st.columns(2)
+    with col1:
+        atf_file = st.file_uploader("1. Upload ATF File (Parquet)", type=['parquet', 'pq'])
+    with col2:
+        fin_file = st.file_uploader("2. Upload Finance File (Excel)", type=['xlsx', 'xls', 'xlsb'])
 
-      # --- BƯỚC 3: MAPPING VÀ TẠO CỘT MATCH ---
-      status_text.text("Matching Product ID and Sales Order...")
-      progress_bar.progress(45)
+    if st.button("Start Data Processing", type="primary"):
+        if not atf_file or not fin_file:
+            st.error("⚠️ Error: Please upload both ATF (Parquet) and Finance (Excel) files before processing.")
+            return
 
-      if "Product ID" in df_atf.columns:
-        df_atf["Product ID Match"] = (
-            df_atf["Product ID"].astype(str).str.strip().isin(fin_part_list)
-        )
-      else:
-        df_atf["Product ID Match"] = False
+        progress_bar = st.progress(0, text="Starting data processing...")
+        status_text = st.empty()
 
-      if "Order Number" in df_atf.columns:
-        atf_orders = (
-            df_atf["Order Number"].astype(str).str.strip().str.lstrip("0")
-        )
-        df_atf["Sales Order Match"] = atf_orders.isin(fin_sales_list)
-      else:
-        df_atf["Sales Order Match"] = False
+        try:
+            # --- BƯỚC 1: ĐỌC DỮ LIỆU ATF PARQUET ---
+            status_text.text("Reading ATF Parquet file...")
+            progress_bar.progress(15)
+            df_atf = pd.read_parquet(atf_file)
+            
+            # Khắc phục lỗi PyArrow Dtype cho Streamlit/Pandas
+            for col in df_atf.columns:
+                if isinstance(df_atf[col].dtype, (pd.ArrowDtype, pd.StringDtype)) or str(df_atf[col].dtype).startswith('string'):
+                    df_atf[col] = df_atf[col].astype(object)
 
-      # --- BƯỚC 4: FILTER DỮ LIỆU ATF ---
-      status_text.text("Filtering ATF data...")
-      progress_bar.progress(60)
+            # --- BƯỚC 2: REVIEW FINANCE FILE ---
+            status_text.text("Scanning Finance Excel file sheets...")
+            progress_bar.progress(30)
+            fin_xls = pd.ExcelFile(fin_file)
 
-      filtered_atf = df_atf.copy()
-      if "Process Code" in filtered_atf.columns:
-        cond_process = (
-            filtered_atf["Process Code"].astype(str).str.strip().str.upper()
-            == "CCREC"
-        )
-      else:
-        cond_process = False
+            has_part_no = False
+            has_sales_order = False
+            part_col_name = None
+            sales_col_name = None
+            df_fin = None
 
-      filtered_atf = filtered_atf[
-          (cond_process)
-          & (filtered_atf["Product ID Match"] == True)
-          & (filtered_atf["Sales Order Match"] == True)
-      ].copy()
+            for sheet in fin_xls.sheet_names:
+                temp_header = pd.read_excel(fin_xls, sheet_name=sheet, nrows=0)
+                temp_header.columns = temp_header.columns.astype(str).str.replace("'", "", regex=False).str.strip()
+                cols_lower = temp_header.columns.str.lower()
 
-      # --- BƯỚC 5: LẤY LATEST INVOICES ---
-      status_text.text("Applying Latest Invoices ranking...")
-      progress_bar.progress(70)
+                part_matches = cols_lower.str.contains('part no|part number', regex=True, na=False)
+                sales_matches = cols_lower.str.contains('sales order', regex=True, na=False)
 
-      if "Invoice Number" in filtered_atf.columns:
-        filtered_atf["Original Invoice"] = clean_invoice_series(
-            filtered_atf["Invoice Number"]
-        )
-        filtered_atf["SortKey"] = filtered_atf["Invoice Number"].apply(
-            get_invoice_rank
-        )
+                if part_matches.any() and sales_matches.any():
+                    has_part_no = True
+                    has_sales_order = True
+                    part_col_name = temp_header.columns[part_matches].tolist().pop(0)
+                    sales_col_name = temp_header.columns[sales_matches].tolist().pop(0)
 
-        if "Transaction Amount" in filtered_atf.columns:
-          filtered_atf["Temp_Amount"] = (
-              pd.to_numeric(filtered_atf["Transaction Amount"], errors="coerce")
-              .round(2)
-              .abs()
-          )
-          max_keys = filtered_atf.groupby(
-              ["Original Invoice", "Temp_Amount"], dropna=False
-          )["SortKey"].transform("max")
-          filtered_atf.drop(columns=["Temp_Amount"], inplace=True)
-        else:
-          max_keys = filtered_atf.groupby("Original Invoice")[
-              "SortKey"
-          ].transform("max")
+                    df_fin = pd.read_excel(fin_xls, sheet_name=sheet)
+                    df_fin.columns = df_fin.columns.astype(str).str.replace("'", "", regex=False).str.strip()
+                    break
 
-        latest_invoices = filtered_atf[
-            filtered_atf["SortKey"] == max_keys
-        ].copy()
-        latest_invoices.drop(
-            columns=["Original Invoice", "SortKey"],
-            inplace=True,
-            errors="ignore",
-        )
-      else:
-        latest_invoices = filtered_atf.copy()
+            if not (has_part_no and has_sales_order):
+                st.error("❌ Error: Either Part Number or Sales Order column is not available in Finance file.")
+                progress_bar.empty()
+                st.session_state.processed = False
+                return
 
-      # --- BƯỚC 6: TẠO PIVOT TABLE SUMMARY ---
-      status_text.text("Creating Summary Pivot Table...")
-      progress_bar.progress(80)
+            fin_part_list = df_fin[part_col_name].dropna().astype(str).str.strip().tolist()
+            fin_sales_list = df_fin[sales_col_name].dropna().astype(str).str.strip().str.lstrip('0').tolist()
 
-      if (
-          not latest_invoices.empty
-          and "Order Number" in latest_invoices.columns
-          and "Product Description" in latest_invoices.columns
-      ):
-        if "Transaction Amount" in latest_invoices.columns:
-          latest_invoices["Transaction Amount"] = pd.to_numeric(
-              latest_invoices["Transaction Amount"], errors="coerce"
-          ).fillna(0.0)
-          pivot_val = "Transaction Amount"
-          agg_function = "sum"
-        else:
-          pivot_val = "Order Number"
-          agg_function = "size"
+            # --- BƯỚC 3: MAPPING VÀ TẠO CỘT MATCH ---
+            status_text.text("Matching Product ID and Sales Order...")
+            progress_bar.progress(45)
 
-        summary_pt = pd.pivot_table(
-            latest_invoices,
-            values=pivot_val,
-            index=["Order Number"],
-            columns=["Product Description"],
-            aggfunc=agg_function,
-            fill_value=0,
-            margins=True,
-            margins_name="Grand Total",
-        ).reset_index()
-      else:
-        summary_pt = pd.DataFrame(
-            {"Message": ["No data available for Pivot Table"]}
-        )
+            if 'Product ID' in df_atf.columns:
+                df_atf['Product ID Match'] = df_atf['Product ID'].astype(str).str.strip().isin(fin_part_list)
+            else:
+                df_atf['Product ID Match'] = False
 
-      # Xuất YTD Excel Buffer
-      ytd_buffer = BytesIO()
-      with pd.ExcelWriter(ytd_buffer, engine="openpyxl") as writer:
-        clean_filtered_atf = filtered_atf.drop(
-            columns=[
-                "Original Invoice",
-                "SortKey",
-                "Product ID Match",
-                "Sales Order Match",
-            ],
-            errors="ignore",
-        )
-        clean_filtered_atf.to_excel(
-            writer, sheet_name="YTD ATF", index=False
-        )
-        summary_pt.to_excel(writer, sheet_name="Summary", index=False)
+            if 'Order Number' in df_atf.columns:
+                atf_orders = df_atf['Order Number'].astype(str).str.strip().str.lstrip('0')
+                df_atf['Sales Order Match'] = atf_orders.isin(fin_sales_list)
+            else:
+                df_atf['Sales Order Match'] = False
 
-      # --- BƯỚC 7: LỌC CAMERAS CHO COR VÀ REV ---
-      status_text.text("Generating COR and REV datasets...")
-      progress_bar.progress(90)
+            # --- BƯỚC 4: FILTER DỮ LIỆU ATF ---
+            status_text.text("Filtering ATF data...")
+            progress_bar.progress(60)
 
-      if "Product Description" in latest_invoices.columns:
-        latest_invoices = latest_invoices[
-            latest_invoices["Product Description"]
-            .astype(str)
-            .str.strip()
-            .str.lower()
-            == "cameras"
-        ].copy()
+            filtered_atf = df_atf.copy()
+            if 'Process Code' in filtered_atf.columns:
+                cond_process = filtered_atf['Process Code'].astype(str).str.strip().str.upper() == 'CCREC'
+            else:
+                cond_process = False
 
-      df_cor = latest_invoices.copy()
-      df_rev = latest_invoices.copy()
+            filtered_atf = filtered_atf[
+                (cond_process) & 
+                (filtered_atf['Product ID Match'] == True) & 
+                (filtered_atf['Sales Order Match'] == True)
+            ].copy()
 
-      if "Transaction Number" in df_cor.columns:
-        df_cor["Transaction Number"] = df_cor["Transaction Number"].apply(
-            lambda x: increment_or_append_suffix(x, "COR")
-        )
-      if "Invoice Number" in df_cor.columns:
-        df_cor["Invoice Number"] = df_cor["Invoice Number"].apply(
-            lambda x: increment_or_append_suffix(x, "COR")
-        )
+            # --- BƯỚC 5: LẤY LATEST INVOICES ---
+            status_text.text("Applying Latest Invoices ranking...")
+            progress_bar.progress(70)
 
-      df_cor["Transaction Type"] = "MANUAL_ADJ"
-      if "Product Description" in df_cor.columns:
-        df_cor["Product Description"] = "AVA-Cameras"
-      if "Product Line" in df_cor.columns:
-        df_cor["Product Line"] = "Alta Video"
+            if 'Invoice Number' in filtered_atf.columns:
+                filtered_atf['Original Invoice'] = clean_invoice_series(filtered_atf['Invoice Number'])
+                filtered_atf['SortKey'] = filtered_atf['Invoice Number'].apply(get_invoice_rank)
 
-      if "Transaction Number" in df_rev.columns:
-        df_rev["Transaction Number"] = df_cor["Transaction Number"].apply(
-            replace_cor_with_rev
-        )
-      if "Invoice Number" in df_rev.columns:
-        df_rev["Invoice Number"] = df_cor["Invoice Number"].apply(
-            replace_cor_with_rev
-        )
+                if 'Transaction Amount' in filtered_atf.columns:
+                    filtered_atf['Temp_Amount'] = pd.to_numeric(filtered_atf['Transaction Amount'], errors='coerce').round(2).abs()
+                    max_keys = filtered_atf.groupby(['Original Invoice', 'Temp_Amount'], dropna=False)['SortKey'].transform('max')
+                    filtered_atf.drop(columns=['Temp_Amount'], inplace=True)
+                else:
+                    max_keys = filtered_atf.groupby('Original Invoice')['SortKey'].transform('max')
 
-      df_rev["Transaction Type"] = "MANUAL_ADJ"
+                latest_invoices = filtered_atf[filtered_atf['SortKey'] == max_keys].copy()
+                latest_invoices.drop(columns=['Original Invoice', 'SortKey'], inplace=True, errors='ignore')
+            else:
+                latest_invoices = filtered_atf.copy()
 
-      for col in currency_cols:
-        if col in df_rev.columns:
-          df_rev[col] = pd.to_numeric(df_rev[col], errors="coerce") * -1
+            # --- BƯỚC 6: TẠO PIVOT TABLE SUMMARY ---
+            status_text.text("Creating Summary Pivot Table...")
+            progress_bar.progress(80)
 
-      # Xuất Output Excel & CSV Buffers
-      output_xlsx_buffer = BytesIO()
-      with pd.ExcelWriter(output_xlsx_buffer, engine="openpyxl") as writer:
-        df_cor.to_excel(writer, sheet_name="COR", index=False)
-        df_rev.to_excel(writer, sheet_name="REV", index=False)
+            if not latest_invoices.empty and 'Order Number' in latest_invoices.columns and 'Product Description' in latest_invoices.columns:
+                pivot_val = 'Transaction Amount' if 'Transaction Amount' in latest_invoices.columns else 'Order Number'
+                agg_function = 'sum' if 'Transaction Amount' in latest_invoices.columns else 'size'
 
-      df_consolidated = pd.concat([df_cor, df_rev], ignore_index=True)
-      output_csv_buffer = df_consolidated.to_csv(index=False).encode(
-          "utf-8-sig"
-      )
+                summary_pt = pd.pivot_table(
+                    latest_invoices,
+                    values=pivot_val,
+                    index=['Order Number'],
+                    columns=['Product Description'],
+                    aggfunc=agg_function,
+                    fill_value=0,
+                    margins=True,
+                    margins_name='Grand Total'
+                ).reset_index()
+            else:
+                summary_pt = pd.DataFrame({"Message": ["No data available for Pivot Table"]})
 
-      # Lưu dữ liệu vào Session State
-      st.session_state.ytd_xlsx = ytd_buffer.getvalue()
-      st.session_state.output_xlsx = output_xlsx_buffer.getvalue()
-      st.session_state.output_csv = output_csv_buffer
-      st.session_state.processed = True
+            # Xuất YTD Excel Buffer
+            ytd_buffer = BytesIO()
+            with pd.ExcelWriter(ytd_buffer, engine='openpyxl') as writer:
+                clean_filtered_atf = filtered_atf.drop(columns=['Original Invoice', 'SortKey', 'Product ID Match', 'Sales Order Match'], errors='ignore')
+                clean_filtered_atf.to_excel(writer, sheet_name='YTD ATF', index=False)
+                summary_pt.to_excel(writer, sheet_name='Summary', index=False)
 
-      progress_bar.progress(100)
-      status_text.success("🎉 Processing completed successfully!")
+            # --- BƯỚC 7: LỌC CAMERAS CHO COR VÀ REV ---
+            status_text.text("Generating COR and REV datasets...")
+            progress_bar.progress(90)
 
-    except Exception as e:
-      st.error(f"❌ Processing Error: {e}")
-      progress_bar.empty()
-      st.session_state.processed = False
+            if 'Product Description' in latest_invoices.columns:
+                latest_invoices = latest_invoices[latest_invoices['Product Description'].astype(str).str.strip().str.lower() == 'cameras'].copy()
 
-  # --- HIỂN THỊ CÁC NÚT TẢI XUỐNG ---
-  if st.session_state.processed:
-    st.subheader("📥 Download Results")
-    col_btn1, col_btn2, col_btn3 = st.columns(3)
+            df_cor = latest_invoices.copy()
+            df_rev = latest_invoices.copy()
 
-    with col_btn1:
-      st.download_button(
-          label="📥 Download YTD Review (.xlsx)",
-          data=st.session_state.ytd_xlsx,
-          file_name="YTD Alta Accessories Review.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          type="primary",
-      )
+            if 'Transaction Number' in df_cor.columns:
+                df_cor['Transaction Number'] = df_cor['Transaction Number'].apply(lambda x: increment_or_append_suffix(x, 'COR'))
+            if 'Invoice Number' in df_cor.columns:
+                df_cor['Invoice Number'] = df_cor['Invoice Number'].apply(lambda x: increment_or_append_suffix(x, 'COR'))
 
-    with col_btn2:
-      st.download_button(
-          label="📥 Download Output (.xlsx)",
-          data=st.session_state.output_xlsx,
-          file_name="Output.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          type="primary",
-      )
+            df_cor['Transaction Type'] = "MANUAL_ADJ"
+            if 'Product Description' in df_cor.columns:
+                df_cor['Product Description'] = "AVA-Cameras"
+            if 'Product Line' in df_cor.columns:
+                df_cor['Product Line'] = "Alta Video"
 
-    with col_btn3:
-      st.download_button(
-          label="📥 Download Output (.csv)",
-          data=st.session_state.output_csv,
-          file_name="Output.csv",
-          mime="text/csv",
-          type="primary",
-      )
+            if 'Transaction Number' in df_rev.columns:
+                df_rev['Transaction Number'] = df_cor['Transaction Number'].apply(replace_cor_with_rev)
+            if 'Invoice Number' in df_rev.columns:
+                df_rev['Invoice Number'] = df_cor['Invoice Number'].apply(replace_cor_with_rev)
 
+            df_rev['Transaction Type'] = "MANUAL_ADJ"
+
+            currency_cols = ['Transaction Amount', 'EUR Value', 'CAD Value', 'GBP Value', 'AUD Value', 'Native Value']
+            for col in currency_cols:
+                if col in df_rev.columns:
+                    df_rev[col] = pd.to_numeric(df_rev[col], errors='coerce') * -1
+
+            # Xuất Output Excel & CSV Buffers
+            output_xlsx_buffer = BytesIO()
+            with pd.ExcelWriter(output_xlsx_buffer, engine='openpyxl') as writer:
+                df_cor.to_excel(writer, sheet_name='COR', index=False)
+                df_rev.to_excel(writer, sheet_name='REV', index=False)
+
+            df_consolidated = pd.concat([df_cor, df_rev], ignore_index=True)
+            output_csv_buffer = df_consolidated.to_csv(index=False).encode('utf-8-sig')
+
+            # Lưu dữ liệu vào Session State
+            st.session_state.ytd_xlsx = ytd_buffer.getvalue()
+            st.session_state.output_xlsx = output_xlsx_buffer.getvalue()
+            st.session_state.output_csv = output_csv_buffer
+            st.session_state.processed = True
+
+            progress_bar.progress(100)
+            status_text.success("🎉 Processing completed successfully!")
+
+        except Exception as e:
+            st.error(f"❌ Processing Error: {e}")
+            progress_bar.empty()
+            st.session_state.processed = False
+
+    # --- HIỂN THỊ CÁC NÚT TẢI XUỐNG ---
+    if st.session_state.processed:
+        st.subheader("📥 Download Results")
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
+
+        with col_btn1:
+            st.download_button(
+                label="📥 Download YTD Review (.xlsx)",
+                data=st.session_state.ytd_xlsx,
+                file_name="YTD Alta Accessories Review.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
+            )
+
+        with col_btn2:
+            st.download_button(
+                label="📥 Download Output (.xlsx)",
+                data=st.session_state.output_xlsx,
+                file_name="Output.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary"
+            )
+
+        with col_btn3:
+            st.download_button(
+                label="📥 Download Output (.csv)",
+                data=st.session_state.output_csv,
+                file_name="Output.csv",
+                mime="text/csv",
+                type="primary"
+            )
 
 if __name__ == "__main__":
-  main()
+    main()
