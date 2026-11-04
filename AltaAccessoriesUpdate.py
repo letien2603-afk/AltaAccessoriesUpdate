@@ -256,8 +256,8 @@ def main():
             if 'Product Description' in latest_invoices.columns:
                 latest_invoices = latest_invoices[latest_invoices['Product Description'].astype(str).str.strip().str.lower() == 'cameras'].copy()
 
-            df_cor = latest_invoices.copy().drop(columns=['Product ID Match','Sales Order Match'], inplace=True)
-            df_rev = latest_invoices.copy().drop(columns=['Product ID Match','Sales Order Match'], inplace=True)
+            df_cor = latest_invoices.copy()
+            df_rev = latest_invoices.copy()
 
             if 'Transaction Number' in df_cor.columns:
                 df_cor['Transaction Number'] = df_cor['Transaction Number'].apply(lambda x: increment_or_append_suffix(x, 'COR'))
