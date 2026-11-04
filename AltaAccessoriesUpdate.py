@@ -297,12 +297,12 @@ def main():
                     df_rev[col] = pd.to_numeric(df_rev[col], errors='coerce') * -1
 
             df_consolidated = pd.concat([df_cor, df_rev], ignore_index=True)
-            df_consolidated = df_consolidated.drop(columns=['Product ID Match','Sales Order Match'], inplace=True)
             
             # Xuất Output Excel & CSV Buffers
             output_xlsx_buffer = io.BytesIO()
             with pd.ExcelWriter(output_xlsx_buffer, engine='openpyxl') as writer:
                 df_consolidated.to_excel(writer, sheet_name='Consolidated', index=False)
+                df_consolidated = df_consolidated.drop(columns=['Product ID Match','Sales Order Match'], inplace=True)
             
             output_csv_buffer = df_consolidated.to_csv(index=False).encode('utf-8-sig')
 
