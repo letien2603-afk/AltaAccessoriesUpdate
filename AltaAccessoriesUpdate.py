@@ -94,8 +94,9 @@ def main():
 
         progress_bar = st.progress(5, text="Scanning through ATF file...")
 
-        # --- read ATF parquet file
-        pd.read_parquet(atf_file)
+        try:
+            # --- read ATF parquet file
+            pd.read_parquet(atf_file)
         
             
             # --- BƯỚC 2: QUÉT SIÊU TỐC FINANCE FILE ---
