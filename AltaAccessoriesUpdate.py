@@ -60,7 +60,7 @@ def replace_cor_with_rev(val):
 # =====================================================================
 def main():
     st.set_page_config(page_title="Alta Accessories Update Tool", layout="wide")
-    st.title("ATF & Finance Data Processing Tool")
+    st.title("Alta Accessories Corrections")
 
     # Khởi tạo Session State
     if 'processed' not in st.session_state:
