@@ -265,7 +265,7 @@ def main():
             if 'Product Description' in df_cor.columns:
                 df_cor['Product Description'] = "AVA-Cameras"
             if 'Product Line' in df_cor.columns:
-                df_cor['Product Line'] = "Alta Video".
+                df_cor['Product Line'] = "Alta Video"
                 
             # [YÊU CẦU 3C]: Cập nhật Comment cho sheet COR
             if user_comment:
