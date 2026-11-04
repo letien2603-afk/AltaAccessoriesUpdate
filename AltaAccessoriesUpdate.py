@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import re
 import gc
+import io
 from io import BytesIO
 
 # =====================================================================
