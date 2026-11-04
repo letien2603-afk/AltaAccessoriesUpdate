@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 import re
+import gc
 from io import BytesIO
-
-st.set_page_config(page_title="Alta Accessories Update Tool", layout="wide")
 
 # =====================================================================
 # 1. HÀM XỬ LÝ CHUỖI SIÊU TỐC VÀ LATEST INVOICES
@@ -59,6 +58,7 @@ def replace_cor_with_rev(val):
 # 2. CHƯƠNG TRÌNH STREAMLIT
 # =====================================================================
 def main():
+    st.set_page_config(page_title="Alta Accessories Update Tool", layout="wide")
     st.title("ATF & Finance Data Processing Tool")
 
     # Khởi tạo Session State
@@ -84,19 +84,30 @@ def main():
 
         try:
             # --- BƯỚC 1: ĐỌC DỮ LIỆU ATF PARQUET ---
-            status_text.text("Reading ATF Parquet file...")
-            progress_bar.progress(15)
-            df_atf = pd.read_parquet(atf_file)
+            status_text.text("Reading ATF Parquet file safely into memory...")
+            progress_bar.progress(10)
             
-            # Khắc phục lỗi PyArrow Dtype cho Streamlit/Pandas
+            # Đọc Parquet từ BytesIO buffer
+            atf_bytes = BytesIO(atf_file.getvalue())
+            try:
+                df_atf = pd.read_parquet(atf_bytes, engine='pyarrow')
+            except Exception:
+                atf_bytes.seek(0)
+                df_atf = pd.read_parquet(atf_bytes, engine='fastparquet')
+
+            # Chuyển đổi tất cả cột string/object về Python object gốc để tránh PyArrow datatype conflict & memory bugs
             for col in df_atf.columns:
-                if isinstance(df_atf[col].dtype, (pd.ArrowDtype, pd.StringDtype)) or str(df_atf[col].dtype).startswith('string'):
-                    df_atf[col] = df_atf[col].astype(object)
+                if str(df_atf[col].dtype).startswith(('string', 'arrow', 'LargeString', 'string[pyarrow]')):
+                    df_atf[col] = df_atf[col].astype(str)
+                elif df_atf[col].dtype == object:
+                    df_atf[col] = df_atf[col].astype(str)
+
+            progress_bar.progress(25)
 
             # --- BƯỚC 2: REVIEW FINANCE FILE ---
             status_text.text("Scanning Finance Excel file sheets...")
-            progress_bar.progress(30)
-            fin_xls = pd.ExcelFile(fin_file)
+            fin_bytes = BytesIO(fin_file.getvalue())
+            fin_xls = pd.ExcelFile(fin_bytes)
 
             has_part_no = False
             has_sales_order = False
@@ -122,6 +133,10 @@ def main():
                     df_fin.columns = df_fin.columns.astype(str).str.replace("'", "", regex=False).str.strip()
                     break
 
+            # Giải phóng fin_xls khỏi bộ nhớ
+            del fin_xls
+            gc.collect()
+
             if not (has_part_no and has_sales_order):
                 st.error("❌ Error: Either Part Number or Sales Order column is not available in Finance file.")
                 progress_bar.empty()
@@ -130,6 +145,10 @@ def main():
 
             fin_part_list = df_fin[part_col_name].dropna().astype(str).str.strip().tolist()
             fin_sales_list = df_fin[sales_col_name].dropna().astype(str).str.strip().str.lstrip('0').tolist()
+            
+            # Giải phóng df_fin
+            del df_fin
+            gc.collect()
 
             # --- BƯỚC 3: MAPPING VÀ TẠO CỘT MATCH ---
             status_text.text("Matching Product ID and Sales Order...")
@@ -151,6 +170,9 @@ def main():
             progress_bar.progress(60)
 
             filtered_atf = df_atf.copy()
+            del df_atf
+            gc.collect()
+
             if 'Process Code' in filtered_atf.columns:
                 cond_process = filtered_atf['Process Code'].astype(str).str.strip().str.upper() == 'CCREC'
             else:
@@ -190,15 +212,19 @@ def main():
                 pivot_val = 'Transaction Amount' if 'Transaction Amount' in latest_invoices.columns else 'Order Number'
                 agg_function = 'sum' if 'Transaction Amount' in latest_invoices.columns else 'size'
 
+                # Ép kiểu numeric cho pivot_val nếu là Transaction Amount
+                if pivot_val in latest_invoices.columns:
+                    latest_invoices[pivot_val] = pd.to_numeric(latest_invoices[pivot_val], errors='coerce').fillna(0)
+
                 summary_pt = pd.pivot_table(
-                    latest_invoices,
-                    values=pivot_val,
-                    index=['Order Number'],
-                    columns=['Product Description'],
+                    latest_invoices, 
+                    values=pivot_val, 
+                    index=['Order Number'], 
+                    columns=['Product Description'], 
                     aggfunc=agg_function,
                     fill_value=0,
-                    margins=True,
-                    margins_name='Grand Total'
+                    margins=True,                 
+                    margins_name='Grand Total'    
                 ).reset_index()
             else:
                 summary_pt = pd.DataFrame({"Message": ["No data available for Pivot Table"]})
@@ -257,6 +283,9 @@ def main():
             st.session_state.output_xlsx = output_xlsx_buffer.getvalue()
             st.session_state.output_csv = output_csv_buffer
             st.session_state.processed = True
+
+            # Dọn dẹp bộ nhớ cuối
+            gc.collect()
 
             progress_bar.progress(100)
             status_text.success("🎉 Processing completed successfully!")
