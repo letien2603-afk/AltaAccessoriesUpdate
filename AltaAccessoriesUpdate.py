@@ -96,7 +96,7 @@ def main():
 
         try:
             # --- read ATF parquet file
-            pd.read_parquet(atf_file)
+            df_atf = pd.read_parquet(atf_file)
         
             
             # --- BƯỚC 2: QUÉT SIÊU TỐC FINANCE FILE ---
