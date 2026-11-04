@@ -76,11 +76,7 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         # Gắn on_change vào uploader để khi đổi/xóa file, giao diện tự reset
-        atf_file = st.file_uploader(
-            "Upload ATF File", 
-            type=['xlsx', 'xls', 'xlsb', 'csv'],
-            on_change=reset_download_state
-        )
+        atf_file = st.file_uploader("ATF File", type=['parquet', 'pq'])
     with col2:
         finance_file = st.file_uploader(
             "Upload Finance File", 
@@ -98,12 +94,9 @@ def main():
 
         progress_bar = st.progress(5, text="Scanning through ATF file...")
 
+        # --- read ATF parquet file
+        pd.read_parquet(atf_file)
         
-        try:
-            if atf_file.name.endswith('.csv'):
-                df_atf = pd.read_csv(atf_file)
-            else:
-                df_atf = pd.read_excel(atf_file)
             
             # --- BƯỚC 2: QUÉT SIÊU TỐC FINANCE FILE ---
             progress_bar.progress(15, text="Scanning through the Finance file...")
