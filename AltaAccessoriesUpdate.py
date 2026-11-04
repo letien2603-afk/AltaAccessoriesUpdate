@@ -242,10 +242,11 @@ def main():
             # Xuất YTD Excel Buffer
             ytd_buffer = BytesIO()
             with pd.ExcelWriter(ytd_buffer, engine='openpyxl') as writer:
-                clean_filtered_atf = filtered_atf.drop(columns=['Original Invoice', 'SortKey', 'Product ID Match', 'Sales Order Match'], errors='ignore')
+                summary_pt.to_excel(writer, sheet_name='Summary', index=False)
+                clean_filtered_atf = filtered_atf.drop(columns=['Original Invoice', 'SortKey'], errors='ignore')
                 clean_filtered_atf.to_excel(writer, sheet_name='YTD ATF', index=False)
                 latest_invoices.to_excel(writer, sheet_name='YTD ATF-Latest Inv', index=False)
-                summary_pt.to_excel(writer, sheet_name='Summary', index=False)
+                
 
             # --- BƯỚC 7: LỌC CAMERAS CHO COR VÀ REV ---
             status_text.text("Generating COR and REV datasets...")
